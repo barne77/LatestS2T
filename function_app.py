@@ -3,28 +3,28 @@
 # Licensed under the MIT license. See LICENSE.md file in the project root for full license information.
 import logging
 import azure.functions as func
-from datetime import datetime
-from functools import reduce
-from http import HTTPStatus
-from itertools import chain
-from json import dumps, loads
-from os import linesep
-from pathlib import Path
-from time import sleep
-from typing import Dict, List, Tuple
-from pydub import AudioSegment
+import uuid
+import helper
+import rest_helper
+import user_config_helper
+import pymysql
+import pyodbc
+import os
+import json
+import typing
+from azure.core.credentials import AzureKeyCredential
+from azure.ai.textanalytics import TextAnalyticsClient, HealthcareEntityRelation
 try:
-    import uuid
-    import helper
-    import rest_helper
-    import user_config_helper
-    import pymysql
-    import pyodbc
-    import os
-    import json
-    import typing
-    from azure.core.credentials import AzureKeyCredential
-    from azure.ai.textanalytics import TextAnalyticsClient, HealthcareEntityRelation
+    from datetime import datetime
+    from functools import reduce
+    from http import HTTPStatus
+    from itertools import chain
+    from json import dumps, loads
+    from os import linesep
+    from pathlib import Path
+    from time import sleep
+    from typing import Dict, List, Tuple
+    from pydub import AudioSegment
 except:
     pass
     
