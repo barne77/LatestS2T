@@ -1,3 +1,7 @@
+#
+# Copyright (c) Microsoft. All rights reserved.
+# Licensed under the MIT license. See LICENSE.md file in the project root for full license information.
+#
 import logging
 import azure.functions as func
 from datetime import datetime
@@ -11,15 +15,20 @@ from time import sleep
 from typing import Dict, List, Tuple
 from pydub import AudioSegment
 import uuid
-from . import helper
-from . import rest_helper
-from . import user_config_helper
+import helper
+import rest_helper
+import user_config_helper
 import pymysql
+import pyodbc
 import os
 import json
 import typing
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.textanalytics import TextAnalyticsClient, HealthcareEntityRelation
+
+app = func.FunctionApp()
+@app.function_name(name="http_trigger")
+@app.route(route="main")
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
     logging.info('Python HTTP trigger function processed a request.')
@@ -34,23 +43,26 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             name = req_body.get('name')
 
     if name:
-        # This should not change unless you switch to a new version of the Speech REST API.
+
+#Azure Synapse Connectivity
+        server_name = "callctrrecord.database.windows.net"
+        database_name = "ccr_sql_serverless"
+        username = "sqladmin"
+        password = "Y0uandm3."
+        synapseCS = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server_name};DATABASE={database_name};UID={username};PWD={password}"
+
+
+# This should not change unless you switch to a new version of the Speech REST API.
         SPEECH_TRANSCRIPTION_PATH = "/speechtotext/v3.2-preview.1/transcriptions"
 
-        # These should not change unless you switch to a new version of the Cognitive Language REST API.
+# These should not change unless you switch to a new version of the Cognitive Language REST API.
         SENTIMENT_ANALYSIS_PATH = "/language/:analyze-text";
         SENTIMENT_ANALYSIS_QUERY = "?api-version=2023-04-15-preview";
         CONVERSATION_ANALYSIS_PATH = "/language/analyze-conversations/jobs";
         CONVERSATION_ANALYSIS_QUERY = "?api-version=2023-04-15-preview";
         CONVERSATION_SUMMARY_MODEL_VERSION = "2023-04-15-preview";
-        MYSQL_SERVER_NAME = "barne77mysql.mysql.database.azure.com";
-        MYSQL_SERVER_DB = "mydb";
-        MYSQL_SERVER_UNAME = "barne77admin";
-        MYSQL_SERVER_PASS = "Y0uandm3.";
-        CONN_ENDPOINT = "https://barne771-lang.congnitiveservices.azure.com";
-        CONN_KEY = "92298af1cc5e4a5b84e57aee17ea7de2";
 
-        # How long to wait while polling batch transcription and conversation analysis status.
+# How long to wait while polling batch transcription and conversation analysis status.
         WAIT_SECONDS = 10
 
         class TranscriptionPhrase(object) :
@@ -91,7 +103,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 "display" : "",
                 "itn" : "",
                 "lexical" : ""
-             }
+            }
 
         def create_transcription(user_config : helper.Read_Only_Dict) -> str :
             uri = f"https://{user_config['speech_endpoint']}{SPEECH_TRANSCRIPTION_PATH}"
@@ -101,13 +113,20 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     # Notes:
     # - locale and displayName are required.
     # - diarizationEnabled should only be used with mono audio input.
-            with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                    f.write(name  + "\n")
             content = {
-                #"contentUrls" : [user_config["input_audio_url"]],
-                "contentUrls" : [name],
+                "contentUrls" : [user_config["input_audio_url"]],
                 "properties" : {
-                    "diarizationEnabled" : not user_config["use_stereo_audio"],
+                    "diarizationEnabled" : True,
+                    "wordLevelTimestampsEnabled": True,
+                    "displayFormWordLevelTimestampsEnabled": True,
+                    "channels": [0],
+                    "diarization": {
+                        "speakers": {
+                            "minCount": 1,
+                            "maxCount": 2
+                        }
+                    },
+                    "punctuationMode": "DictatedAndAutomatic",
                     "timeToLive" : "PT30M"
                 },
                 "locale" : user_config["locale"],
@@ -131,7 +150,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         def get_transcription_status(transcription_id : str, user_config : helper.Read_Only_Dict) -> bool :
             uri = f"https://{user_config['speech_endpoint']}{SPEECH_TRANSCRIPTION_PATH}/{transcription_id}"
             response = rest_helper.send_get(uri=uri, key=user_config["speech_subscription_key"], expected_status_codes=[HTTPStatus.OK])
-            if "failed" == response["json"]["status"].lower() :    
+            if "failed" == response["json"]["status"].lower() :
                 raise Exception(f"Unable to transcribe audio input. Response:{linesep}{response['text']}")
             else :
                 return "succeeded" == response["json"]["status"].lower()
@@ -140,9 +159,6 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             done = False
             while not done :
                 print(f"Waiting {WAIT_SECONDS} seconds for transcription to complete.")
-                #Write to output file
-                with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                    f.write(f"Waiting {WAIT_SECONDS} seconds for transcription to complete."  + "\n")
                 sleep(WAIT_SECONDS)
                 done = get_transcription_status(transcription_id, user_config=user_config)
 
@@ -190,7 +206,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             content = {
                 "kind" : "SentimentAnalysis",
                 "analysisInput" : { "documents" : documents },
-                }
+            }
             response = rest_helper.send_post(uri = uri, content=content, key=user_config["language_subscription_key"], expected_status_codes=[HTTPStatus.OK])
             return response["json"]["results"]["documents"]
 
@@ -298,8 +314,6 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             done = False
             while not done :
                 print(f"Waiting {WAIT_SECONDS} seconds for conversation analysis to complete.")
-                with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                    f.write(f"Waiting {WAIT_SECONDS} seconds for conversation analysis to complete." + "\n")
                 sleep(WAIT_SECONDS)
                 done = get_conversation_analysis_status(conversation_analysis_url, user_config=user_config)
 
@@ -346,7 +360,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                     else :
                         result += f"Recognized entities (PII): none.{linesep}"
                 result += linesep
-            result += reduce(lambda acc, item : f"{acc}    {item.aspect}: {item.summary}.{linesep}", conversation_analysis.summary, f"Conversation summary:{linesep}")
+                result += reduce(lambda acc, item : f"{acc}    {item.aspect}: {item.summary}.{linesep}", conversation_analysis.summary, f"Conversation summary:{linesep}")
             return result
 
         def print_simple_output(phrases : List[TranscriptionPhrase], sentiment_analysis_results : List[SentimentAnalysisResult], conversation_analysis : Dict, user_config : helper.Read_Only_Dict) -> None :
@@ -410,16 +424,12 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             json_obj1 = json.dumps(results)
             json_obj = json.loads(json_obj1)
      
-#Connect to the SQL Database
-            with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                    f.write(f"Connecting to SQL DB"  + "\n")
-            conn = pymysql.connect(host=MYSQL_SERVER_NAME, user=MYSQL_SERVER_UNAME, password=MYSQL_SERVER_PASS, db=MYSQL_SERVER_DB, ssl={"fake_flag_to_enable_tls":True})
+#Connect to the Synapse
+            conn = pyodbc.connect(synapseCS)
             cursor = conn.cursor()
 
 
 #parse json in to sql
-            with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                    f.write(f"Write Phrases."  + "\n")
             transcription_obj = json_obj["transcription"]
             runningname=transcription_obj["source"]
             phrases_array = transcription_obj["recognizedPhrases"]
@@ -434,10 +444,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 pos = validate_string(phrases_obj["nBest"][0]["sentiment"]["positive"])
                 neu = validate_string(phrases_obj["nBest"][0]["sentiment"]["neutral"])
                 neg = validate_string(phrases_obj["nBest"][0]["sentiment"]["negative"])
-                cursor.execute("INSERT INTO testv2 (channel,speaker, offset, lexical, itn, maskedITN, display,name,sentpos,sentneg,sentneu) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",(channel1, speaker1, offset1, lexical1, itn1, maskedITN1, display1, runningname,pos,neg,neu))
+        #cursor.execute("INSERT INTO Call_Map (channel,speaker, offset, lexical, itn, maskedITN, display,name,sentpos,sentneg,sentneu) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",(channel1, speaker1, offset1, lexical1, itn1, maskedITN1, display1, runningname,pos,neg,neu))
+                cursor.execute("INSERT INTO Call_Map (channel,speaker, offset, lexical, itn, maskedITN, display,name,sentpos,sentneg,sentneu) VALUES (?,?,?,?,?,?,?,?,?,?,?)",(channel1, speaker1, offset1, lexical1, itn1, maskedITN1, display1, runningname,pos,neg,neu))
+        
+                conn.commit()
 
-                endpoint = CONN_ENDPOINT
-                key = CONN_KEY
+                endpoint = "https://barne77l-lang.cognitiveservices.azure.com"
+                key = "92298af1cc5e4a5b84e57aee17ea7de2"
 
                 documents = [display1]
                 text_analytics_client = TextAnalyticsClient(
@@ -456,17 +469,19 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                         TASCat = (f"...Subcategory: {entity.subcategory}")
                         TAOffset = (f"...Offset: {entity.offset}")
                         TACscore = (f"...Confidence score: {entity.confidence_score}")
-                        sqlQueryTA="INSERT INTO testv2ta (TAEntity,TANorm,TACat,TASCat,TAOffset,TACscore,name,TASet) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"
+                #sqlQueryTA="INSERT INTO Call_Map_HC (TAEntity,TANorm,TACat,TASCat,TAOffset,TACscore,name,TASet) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"
+                        sqlQueryTA="INSERT INTO Call_Map_HC (TAEntity,TANorm,TACat,TASCat,TAOffset,TACscore,name,TASet) VALUES (?,?,?,?,?,?,?,?)"
                         sqlAnswersTA = (TAEntity,TANorm,TACat,TASCat,TAOffset,TACscore,runningname,offset1)
                         cursor.execute(sqlQueryTA,sqlAnswersTA)
                         TASet = offset1
 
                         if entity.data_sources is not None:
-                         #print("...Data Sources:")
+                    #print("...Data Sources:")
                             for data_source in entity.data_sources:
                                 DSEntitiyID = (f"......Entity ID: {data_source.entity_id}")
                                 DSEntiityName = (f"......Name: {data_source.name}")
-                                sqlQueryEnt="INSERT INTO taentity (DSEntitiyID,DSEntiityName,offset1,name,text) VALUES (%s,%s,%s,%s,%s)"
+                        #sqlQueryEnt="INSERT INTO Call_Map_Ent (DSEntitiyID,DSEntiityName,offset1,name,text) VALUES (%s,%s,%s,%s,%s)"
+                                sqlQueryEnt="INSERT INTO Call_Map_Ent (DSEntitiyID,DSEntiityName,offset1,name,text) VALUES (?,?,?,?,?)"
                                 sqlAnswersEnt = (DSEntitiyID,DSEntiityName,TASet,TANorm,runningname)
                                 cursor.execute(sqlQueryEnt,sqlAnswersEnt)
 
@@ -476,17 +491,16 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                             TAcond = (f"......Conditionality: {entity.assertion.conditionality}")
                             TACert = (f"......Certainty: {entity.assertion.certainty}")
                             TAAssoc = (f"......Association: {entity.assertion.association}")
-                            sqlQueryEntA="INSERT INTO taentityass (Assertion,Cond,Cert,Assoc,offset,name) VALUES (%s,%s,%s,%s,%s,%s)"
+                    #sqlQueryEntA="INSERT INTO Call_Map_Ass (Assertion,Cond,Cert,Assoc,offset,name) VALUES (%s,%s,%s,%s,%s,%s)"
+                            sqlQueryEntA="INSERT INTO Call_Map_Ass (Assertion,Cond,Cert,Assoc,offset,name) VALUES (?,?,?,?,?,?)"
                             sqlAnswersEntA = (TAAsser,TAcond,TACert,TAAssoc,TASet,runningname)
                             cursor.execute(sqlQueryEntA,sqlAnswersEntA)
                     
-                   # for relation in doc.entity_relations:
-                   #     TARelType = (f"Relation of type: {relation.relation_type} has the following roles")
-                   # for role in relation.roles:
-                   #     TARole = (f"...Role '{role.name}' with entity '{role.entity.text}'")
+                    for relation in doc.entity_relations:
+                        TARelType = (f"Relation of type: {relation.relation_type} has the following roles")
+                        for role in relation.roles:
+                            TARole = (f"...Role '{role.name}' with entity '{role.entity.text}'") 
 
-            with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                    f.write(f"Write PII."  + "\n")
             PII_obj = json_obj["conversationAnalyticsResults"]
             PII_array = PII_obj["conversationPiiResults"]
             PII_array1 = PII_array["conversations"][0]["conversationItems"]
@@ -501,42 +515,41 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                     categoryredent = validate_string(PII_obj2["category"])
                     offsetredent = validate_string(PII_obj2["offset"])
                     lengthredent = validate_string(PII_obj2["length"])
+                    Condredent = validate_string(PII_obj2["confidenceScore"])
 
-                    sqlQuery1="INSERT INTO testv2n (textredent,categoryredent,offsetredent,lengthredent,offset,Name) VALUES (%s,%s,%s,%s,%s,%s)"
-                    sqlAnswers1 = (textredent,categoryredent,offsetredent,lengthredent,offsetred,runningname)
+            #sqlQuery1="INSERT INTO Call_Map_TR (textredent,categoryredent,offsetredent,lengthredent,offset,Name,conf) VALUES (%s,%s,%s,%s,%s,%s,%s)"
+                    sqlQuery1="INSERT INTO Call_Map_TR (textredent,categoryredent,offsetredent,lengthredent,offset,Name,conf) VALUES (?,?,?,?,?,?,?)"
+                    sqlAnswers1 = (textredent,categoryredent,offsetredent,lengthredent,offsetred,runningname,Condredent)
                     cursor.execute(sqlQuery1,sqlAnswers1)
 
-                sqlQuery="UPDATE testv2 SET offsetred=%s,itnred=%s,lexicalred=%s,textred=%s WHERE offset = %s and Name = %s"
+        #sqlQuery="UPDATE Call_Map SET offsetred=%s,itnred=%s,lexicalred=%s,textred=%s WHERE offset = %s and Name = %s"
+                sqlQuery="UPDATE Call_Map SET offsetred=?,itnred=?,lexicalred=?,textred=? WHERE offset = ? and Name = ?"
                 sqlAnswers = (offsetred,itnred,lexicalred,textred,offsetred,runningname)
                 cursor.execute(sqlQuery,sqlAnswers)
 
-            with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                    f.write(f"Write PSummary."  + "\n")
             PSummary_obj1 = PII_obj["conversationSummaryResults"]
             PSummary_obj2 = PSummary_obj1["conversations"]
             for i, PSummary_obj3 in enumerate(PSummary_obj2):
                 summaryaspect = validate_string(PSummary_obj3["summaries"][0]["aspect"])
                 summarytext = validate_string(PSummary_obj3["summaries"][0]["text"])
 
-                sqlQuery2="INSERT INTO testv2s (aspect,text,Name) VALUES (%s,%s,%s)"
+        #sqlQuery2="INSERT INTO Call_Map_Store (aspect,text,Name) VALUES (%s,%s,%s)"
+                sqlQuery2="INSERT INTO Call_Map_Store (aspect,text,Name) VALUES (?,?,?)"
                 sqlAnswers2=(summaryaspect,summarytext,runningname)
                 cursor.execute(sqlQuery2,sqlAnswers2)
-            
-            with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                f.write(f"Write PSummary1."  + "\n")
+
             PSummary_obj4 = PII_obj["conversationSummaryResults1"]
             PSummary_obj5 = PSummary_obj4["conversations"]
             for i, PSummary_obj6 in enumerate(PSummary_obj5):
                 summaryaspectr = validate_string(PSummary_obj6["summaries"][0]["aspect"])
                 summarytextr = validate_string(PSummary_obj6["summaries"][0]["text"])
 
-                sqlQueryr="INSERT INTO testv2s (aspect,text,Name) VALUES (%s,%s,%s)"
+        #sqlQueryr="INSERT INTO Call_Map_Store (aspect,text,Name) VALUES (%s,%s,%s)"
+                sqlQueryr="INSERT INTO Call_Map_Store (aspect,text,Name) VALUES (?,?,?)"
                 sqlAnswersr=(summaryaspectr,summarytextr,runningname)
                 cursor.execute(sqlQueryr,sqlAnswersr)
 
     #Commit changes and close connection
-            with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                    f.write(f"Close DB Connection."  + "\n")
             conn.commit()
             conn.close()
 
@@ -566,7 +579,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 """
 
             if user_config_helper.cmd_option_exists("--help") :
-             print(usage)
+                print(usage)
             else :
                 user_config = user_config_helper.user_config_from_args(usage)
                 transcription : Dict
@@ -580,13 +593,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                     transcription_id = create_transcription(user_config)
                     wait_for_transcription(transcription_id, user_config)
                     print(f"Transcription ID: {transcription_id}")
-                    with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                        f.write(f"Transcription ID: {transcription_id}"  + "\n")
                     transcription_files = get_transcription_files(transcription_id, user_config)
                     transcription_uri = get_transcription_uri(transcription_files, user_config)
                     print(f"Transcription URI: {transcription_uri}")
-                    with open('/home/output/output.txt', mode = "a", newline = "") as f :
-                        f.write(f"Transcription URI: {transcription_uri}"  + "\n")
                     transcription = get_transcription(transcription_uri)
                 else :
                     raise Exception(f"Missing input audio URL.{linesep}{usage}")
@@ -601,16 +610,17 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
                 conversation_analysis_url = request_conversation_analysis(conversation_items, user_config)
                 wait_for_conversation_analysis(conversation_analysis_url, user_config)
                 conversation_analysis = get_conversation_analysis(conversation_analysis_url, user_config)
-                #print_simple_output(phrases, sentiment_analysis_results, conversation_analysis, user_config)
+        #print_simple_output(phrases, sentiment_analysis_results, conversation_analysis, user_config)
                 print_full_output_sql(transcription, sentiment_confidence_scores, phrases, conversation_analysis)
-                #print_full_output(user_config["output_file_path"], transcription, sentiment_confidence_scores, phrases, conversation_analysis)
+        #print_full_output(user_config["output_file_path"], transcription, sentiment_confidence_scores, phrases, conversation_analysis)
 
         run()
-        
-        #End of Custom 
+
+         #End of Custom 
         return func.HttpResponse(f"Hello, {name}. This HTTP triggered function executed successfully.")
     else:
         return func.HttpResponse(
-             "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response.",
+            "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response.",
              status_code=200
         )
+        
