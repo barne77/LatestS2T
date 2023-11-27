@@ -115,7 +115,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     # - locale and displayName are required.
     # - diarizationEnabled should only be used with mono audio input.
             content = {
-                "contentUrls" : name,
+                "contentUrls" : [name],
                 "properties" : {
                     "diarizationEnabled" : True,
                     "wordLevelTimestampsEnabled": True,
