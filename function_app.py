@@ -4,13 +4,13 @@
 import logging
 import azure.functions as func
 import uuid
-import pymysql
-import pyodbc
+import os
 try:
     import helper
     import rest_helper
     import user_config_helper
-    import os
+    import pymysql
+    import pyodbc
     import json
     import typing
     from azure.core.credentials import AzureKeyCredential
