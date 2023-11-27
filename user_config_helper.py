@@ -6,7 +6,7 @@
 from os import linesep
 from sys import argv
 from typing import Optional
-from . import helper
+import helper
 
 # This should not change unless the Speech REST API changes.
 PARTIAL_SPEECH_ENDPOINT = ".api.cognitive.microsoft.com";
