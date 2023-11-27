@@ -4,9 +4,9 @@
 import logging
 import azure.functions as func
 import uuid
+import helper
+import rest_helper
 try:
-    import helper
-    import rest_helper
     import user_config_helper
     import pymysql
     import pyodbc
