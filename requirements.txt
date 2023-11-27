@@ -9,5 +9,4 @@ pymysql
 helper
 requests
 azure-ai-textanalytics
-logging
 pyodbc
