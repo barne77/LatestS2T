@@ -6,13 +6,13 @@ import azure.functions as func
 import uuid
 import os
 import helper
-try:
-    import rest_helper
-    import user_config_helper
-    import pymysql
-    import pyodbc
-    import json
-    import typing
+import rest_helper
+import user_config_helper
+import pymysql
+import pyodbc
+import json
+import typing
+try:  
     from azure.core.credentials import AzureKeyCredential
     from azure.ai.textanalytics import TextAnalyticsClient, HealthcareEntityRelation
     from datetime import datetime
