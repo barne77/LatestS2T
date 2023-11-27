@@ -26,7 +26,7 @@ from typing import Dict, List, Tuple
 from pydub import AudioSegment
 
 app = func.FunctionApp()
-@app.function_name(name="http_trigger")
+@app.function_name(name="httptrigger")
 @app.route(route="main")
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
