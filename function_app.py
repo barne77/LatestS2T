@@ -160,6 +160,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             done = False
             while not done :
                 print(f"Waiting {WAIT_SECONDS} seconds for transcription to complete.")
+                logging.info(f"Waiting {WAIT_SECONDS} seconds for transcription to complete.)
                 sleep(WAIT_SECONDS)
                 done = get_transcription_status(transcription_id, user_config=user_config)
 
