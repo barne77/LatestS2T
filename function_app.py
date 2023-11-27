@@ -9,24 +9,21 @@ import pymysql
 import pyodbc
 import json
 import typing
-try:
-    import helper
-    import rest_helper
-    import user_config_helper
-    from azure.core.credentials import AzureKeyCredential
-    from azure.ai.textanalytics import TextAnalyticsClient, HealthcareEntityRelation
-    from datetime import datetime
-    from functools import reduce
-    from http import HTTPStatus
-    from itertools import chain
-    from json import dumps, loads
-    from os import linesep
-    from pathlib import Path
-    from time import sleep
-    from typing import Dict, List, Tuple
-    from pydub import AudioSegment
-except:
-    pass
+import helper
+import rest_helper
+import user_config_helper
+from azure.core.credentials import AzureKeyCredential
+from azure.ai.textanalytics import TextAnalyticsClient, HealthcareEntityRelation
+from datetime import datetime
+from functools import reduce
+from http import HTTPStatus
+from itertools import chain
+from json import dumps, loads
+from os import linesep
+from pathlib import Path
+from time import sleep
+from typing import Dict, List, Tuple
+from pydub import AudioSegment
 
 app = func.FunctionApp()
 @app.function_name(name="http_trigger")
