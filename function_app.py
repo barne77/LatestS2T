@@ -5,14 +5,14 @@ import logging
 import azure.functions as func
 import uuid
 import os
-import helper
-import rest_helper
-import user_config_helper
 import pymysql
 import pyodbc
 import json
 import typing
 try:
+    import helper
+    import rest_helper
+    import user_config_helper
     from azure.core.credentials import AzureKeyCredential
     from azure.ai.textanalytics import TextAnalyticsClient, HealthcareEntityRelation
     from datetime import datetime
