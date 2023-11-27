@@ -105,6 +105,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             }
 
         def create_transcription(user_config : helper.Read_Only_Dict) -> str :
+            logging.info('Python createing transcription.')
+            logging.info(name)
             uri = f"https://{user_config['speech_endpoint']}{SPEECH_TRANSCRIPTION_PATH}"
 
     # Create Transcription API JSON request sample and schema:
