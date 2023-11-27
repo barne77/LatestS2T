@@ -172,6 +172,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         def get_transcription_uri(transcription_files : Dict, user_config : helper.Read_Only_Dict) -> str :
     # Get Transcription Files JSON response sample and schema:
     # https://westus.dev.cognitive.microsoft.com/docs/services/speech-to-text-api-v3-0/operations/GetTranscriptionFiles
+            logging.info('Get transcription uri.')
             value = next(filter(lambda value: "transcription" == value["kind"].lower(), transcription_files["values"]), None)    
             if value is None :
                 raise Exception (f"Unable to parse response from Get Transcription Files API:{linesep}{transcription_files['text']}")
