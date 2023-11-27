@@ -10,5 +10,4 @@ helper
 requests
 azure-ai-textanalytics
 logging
-azure.functions
 pyodbc
